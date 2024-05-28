@@ -17,10 +17,9 @@ fn main() {
                 let read_bytes = stream.read(&mut buf).unwrap();
                 if read_bytes > 0 {
                     let req = HttpRequest::parse(&buf[..read_bytes]).unwrap();
-                    match (req.verb.as_ref(), &req.path.as_bytes()[..6]) {
-                        ("GET", [47, 101, 99, 104, 111, 47]) => {
-                            let content = &req.path[6..];
-                            write_response(&mut stream, &HttpResponse::build("200 OK", &content));
+                    match (req.verb.as_ref(), &req.path.as_bytes()) {
+                        ("GET", [47, 101, 99, 104, 111, 47, content @ ..]) => {
+                            write_response(&mut stream, &HttpResponse::build("200 OK", content));
                         }
                         _ => write_response(&mut stream, RESP_404),
                     }
@@ -60,14 +59,16 @@ impl HttpRequest {
 struct HttpResponse {}
 
 impl HttpResponse {
-    fn build<'a>(status_code: &'a str, content: &'a str) -> Vec<u8> {
-        return format!(
-            "HTTP/1.1 {}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+    fn build<'a>(status_code: &'a str, content: &'a [u8]) -> Vec<u8> {
+        let mut res = format!(
+            "HTTP/1.1 {}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n",
             status_code,
             content.len(),
-            content
         )
         .bytes()
         .collect::<Vec<_>>();
+        res.extend_from_slice(content);
+
+        res
     }
 }
