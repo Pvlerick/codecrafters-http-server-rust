@@ -5,6 +5,7 @@ use std::{
 };
 
 fn main() {
+    const RESP_200: &[u8] = "HTTP/1.1 200 OK\r\n\r\n".as_bytes();
     const RESP_404: &[u8] = "HTTP/1.1 404 Not Found\r\n\r\n".as_bytes();
 
     let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
@@ -18,6 +19,7 @@ fn main() {
                 if read_bytes > 0 {
                     let req = HttpRequest::parse(&buf[..read_bytes]).unwrap();
                     match (req.verb.as_ref(), &req.path.as_bytes()) {
+                        ("GET", [47]) => write_response(&mut stream, RESP_200),
                         ("GET", [47, 101, 99, 104, 111, 47, content @ ..]) => {
                             write_response(&mut stream, &HttpResponse::build("200 OK", content));
                         }
