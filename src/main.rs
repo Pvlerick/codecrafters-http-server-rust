@@ -9,7 +9,7 @@ const RESP_200: &[u8] = b"HTTP/1.1 200 OK\r\n\r\n";
 const RESP_404: &[u8] = b"HTTP/1.1 404 Not Found\r\n\r\n";
 
 const ROOT_PATH: &[u8] = b"/";
-const ECHO_PATH: &[u8] = b"/echo/";
+// const ECHO_PATH: &[u8] = b"/echo/";
 const USERAGENT_PATH: &[u8] = b"/user-agent";
 
 fn main() {
