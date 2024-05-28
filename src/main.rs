@@ -3,6 +3,7 @@ use std::{
     io::Read,
     io::Write,
     net::{TcpListener, TcpStream},
+    thread,
 };
 
 const RESP_200: &[u8] = b"HTTP/1.1 200 OK\r\n\r\n";
@@ -16,7 +17,7 @@ fn main() {
     let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
 
     for stream in listener.incoming() {
-        match stream {
+        thread::spawn(move || match stream {
             Ok(mut stream) => {
                 println!("accepted new connection");
                 let mut buf = [0u8; 1024];
@@ -42,7 +43,7 @@ fn main() {
             Err(e) => {
                 println!("error: {}", e);
             }
-        }
+        });
     }
 }
 fn write_response(mut stream: &TcpStream, response: &[u8]) {
