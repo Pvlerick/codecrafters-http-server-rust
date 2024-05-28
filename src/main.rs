@@ -30,7 +30,10 @@ fn main() {
                         }
                         ("GET", USERAGENT_PATH) => write_response(
                             &mut stream,
-                            req.headers.get("User-Agent").unwrap().as_bytes(),
+                            &HttpResponse::build(
+                                "200 OK",
+                                req.headers.get("User-Agent").unwrap().as_bytes(),
+                            ),
                         ),
                         _ => write_response(&mut stream, RESP_404),
                     }
