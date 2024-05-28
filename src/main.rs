@@ -1,8 +1,11 @@
 use std::{
     collections::HashMap,
-    io::Read,
-    io::Write,
+    env,
+    fs::File,
+    io::{Read, Write},
     net::{TcpListener, TcpStream},
+    ops::Deref,
+    path::PathBuf,
     thread,
 };
 
@@ -14,9 +17,19 @@ const ROOT_PATH: &[u8] = b"/";
 const USERAGENT_PATH: &[u8] = b"/user-agent";
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+    let dir_path: Option<PathBuf> = if args.get(1).is_some_and(|i| i == "--directory") {
+        Some(PathBuf::from(
+            args.get(2).unwrap_or(&"".to_string()).deref(),
+        ))
+    } else {
+        None
+    };
+
     let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
 
     for stream in listener.incoming() {
+        let dir_path = dir_path.clone();
         thread::spawn(move || match stream {
             Ok(mut stream) => {
                 println!("accepted new connection");
@@ -27,15 +40,34 @@ fn main() {
                     match (req.verb.as_ref(), req.path.as_bytes()) {
                         ("GET", ROOT_PATH) => write_response(&mut stream, RESP_200),
                         ("GET", [47, 101, 99, 104, 111, 47, content @ ..]) => {
-                            write_response(&mut stream, &HttpResponse::build("200 OK", content));
+                            write_response(
+                                &mut stream,
+                                &HttpResponse::build_text_plain("200 OK", content),
+                            );
                         }
                         ("GET", USERAGENT_PATH) => write_response(
                             &mut stream,
-                            &HttpResponse::build(
+                            &HttpResponse::build_text_plain(
                                 "200 OK",
                                 req.headers.get("User-Agent").unwrap().as_bytes(),
                             ),
                         ),
+                        ("GET", [47, 102, 105, 108, 101, 115, 47, content @ ..]) => {
+                            let file_path = dir_path
+                                .map(|i| i.join(String::from_utf8_lossy(content).to_string()));
+                            match file_path {
+                                Some(file_path) if file_path.exists() => {
+                                    let mut file = File::open(file_path).unwrap();
+                                    let mut buf: Vec<u8> = Vec::new();
+                                    let bytes_read = file.read_to_end(&mut buf).unwrap();
+                                    write_response(
+                                        &mut &stream,
+                                        &HttpResponse::build_octet_stream(&buf[..bytes_read]),
+                                    );
+                                }
+                                _ => write_response(&stream, RESP_404),
+                            }
+                        }
                         _ => write_response(&mut stream, RESP_404),
                     }
                 }
@@ -86,10 +118,22 @@ impl HttpRequest {
 struct HttpResponse {}
 
 impl HttpResponse {
-    fn build<'a>(status_code: &'a str, content: &'a [u8]) -> Vec<u8> {
+    fn build_text_plain<'a>(status_code: &'a str, content: &'a [u8]) -> Vec<u8> {
         let mut res = format!(
             "HTTP/1.1 {}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n",
             status_code,
+            content.len(),
+        )
+        .bytes()
+        .collect::<Vec<_>>();
+        res.extend_from_slice(content);
+
+        res
+    }
+
+    fn build_octet_stream<'a>(content: &'a [u8]) -> Vec<u8> {
+        let mut res = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n",
             content.len(),
         )
         .bytes()
