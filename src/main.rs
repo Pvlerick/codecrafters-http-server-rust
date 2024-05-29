@@ -10,7 +10,7 @@ use std::{
 };
 
 const RESP_200: &[u8] = b"HTTP/1.1 200 OK\r\n\r\n";
-const RESP_201: &[u8] = b"HTTP/1.1 201 No Content\r\n\r\n";
+const RESP_201: &[u8] = b"HTTP/1.1 201 Created\r\n\r\n";
 const RESP_404: &[u8] = b"HTTP/1.1 404 Not Found\r\n\r\n";
 
 const ROOT_PATH: &[u8] = b"/";
