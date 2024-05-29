@@ -10,6 +10,7 @@ use std::{
 };
 
 const RESP_200: &[u8] = b"HTTP/1.1 200 OK\r\n\r\n";
+const RESP_201: &[u8] = b"HTTP/1.1 201 No Content\r\n\r\n";
 const RESP_404: &[u8] = b"HTTP/1.1 404 Not Found\r\n\r\n";
 
 const ROOT_PATH: &[u8] = b"/";
@@ -68,6 +69,18 @@ fn main() {
                                 _ => write_response(&stream, RESP_404),
                             }
                         }
+                        ("POST", [47, 102, 105, 108, 101, 115, 47, content @ ..]) => {
+                            let file_path = dir_path
+                                .map(|i| i.join(String::from_utf8_lossy(content).to_string()));
+                            match file_path {
+                                Some(file_path) => {
+                                    let mut file = File::create(file_path).unwrap();
+                                    let _ = file.write_all(&req.body.unwrap());
+                                    write_response(&mut stream, RESP_201)
+                                }
+                                _ => write_response(&stream, RESP_404),
+                            }
+                        }
                         _ => write_response(&mut stream, RESP_404),
                     }
                 }
@@ -86,6 +99,7 @@ struct HttpRequest {
     verb: String,
     path: String,
     headers: HashMap<String, String>,
+    body: Option<Vec<u8>>,
 }
 
 impl HttpRequest {
@@ -93,11 +107,16 @@ impl HttpRequest {
         let req = String::from_utf8_lossy(&req);
         let req: Vec<_> = req.split_terminator("\r\n").collect();
 
-        let request_line = req.first().unwrap();
-        let request_line: Vec<_> = request_line.split_whitespace().collect();
+        let request_line: Vec<_> = req[0].split_whitespace().collect();
+
+        let body = if !req[req.len() - 1].is_empty() {
+            Some(req[req.len() - 1].bytes().collect())
+        } else {
+            None
+        };
 
         let headers: HashMap<String, String, _> = HashMap::from_iter(
-            req[1..req.len() - 1]
+            req[1..req.len() - body.as_ref().map_or(1, |_| 2)]
                 .iter()
                 .map(|i| i.split(":").collect::<Vec<_>>())
                 .map(|i| (i[0].to_string(), i[1].trim().to_string())),
@@ -108,6 +127,7 @@ impl HttpRequest {
                 verb: request_line[0].to_owned(),
                 path: request_line[1].to_owned(),
                 headers,
+                body,
             })
         } else {
             None
@@ -149,12 +169,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_request() {
+    fn parse_get_request() {
         let sut = HttpRequest::parse(b"GET /user-agent HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: foobar/1.2.3\r\nAccept: */*\r\n\r\n").unwrap();
         assert_eq!("GET", sut.verb);
         assert_eq!("/user-agent", sut.path);
         assert_eq!("localhost", sut.headers.get("Host").unwrap());
         assert_eq!("foobar/1.2.3", sut.headers.get("User-Agent").unwrap());
         assert_eq!("*/*", sut.headers.get("Accept").unwrap());
+        assert!(sut.body.is_none());
+    }
+
+    #[test]
+    fn parse_post_request() {
+        let sut = HttpRequest::parse(b"POST /user-agent HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: foobar/1.2.3\r\nAccept: */*\r\n\r\nHello World!").unwrap();
+        assert_eq!("POST", sut.verb);
+        assert_eq!("/user-agent", sut.path);
+        assert_eq!("localhost", sut.headers.get("Host").unwrap());
+        assert_eq!("foobar/1.2.3", sut.headers.get("User-Agent").unwrap());
+        assert_eq!("*/*", sut.headers.get("Accept").unwrap());
+        assert_eq!("Hello World!", String::from_utf8_lossy(&sut.body.unwrap()));
     }
 }
