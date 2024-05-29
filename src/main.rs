@@ -9,6 +9,8 @@ use std::{
     thread,
 };
 
+use flate2::{write::GzEncoder, Compression};
+
 const RESP_200: &[u8] = b"HTTP/1.1 200 OK\r\n\r\n";
 const RESP_201: &[u8] = b"HTTP/1.1 201 Created\r\n\r\n";
 const RESP_404: &[u8] = b"HTTP/1.1 404 Not Found\r\n\r\n";
@@ -159,22 +161,30 @@ impl HttpResponse {
         content: &'a [u8],
     ) -> Vec<u8> {
         let mut res = format!(
-            "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\n",
-            status_code,
-            content_type,
-            content.len(),
+            "HTTP/1.1 {}\r\nContent-Type: {}\r\n",
+            status_code, content_type,
         )
         .bytes()
         .collect::<Vec<_>>();
 
         match encoding {
             Some(encodings) if encodings.contains("gzip") => {
-                res.extend_from_slice(format!("Content-Encoding: gzip\r\n\r\n",).as_bytes())
+                res.extend_from_slice(format!("Content-Encoding: gzip\r\n",).as_bytes());
+                let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+                let _ = encoder.write_all(content);
+                let content = encoder.finish().unwrap();
+                res.extend_from_slice(
+                    format!("Content-Length: {}\r\n\r\n", content.len()).as_bytes(),
+                );
+                res.extend(content);
             }
-            _ => res.extend_from_slice("\r\n".as_bytes()),
+            _ => {
+                res.extend_from_slice(
+                    format!("Content-Length: {}\r\n\r\n", content.len()).as_bytes(),
+                );
+                res.extend_from_slice(content);
+            }
         }
-
-        res.extend_from_slice(content);
 
         res
     }
