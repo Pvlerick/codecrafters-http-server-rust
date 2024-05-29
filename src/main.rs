@@ -41,15 +41,23 @@ fn main() {
                     match (req.verb.as_ref(), req.path.as_bytes()) {
                         ("GET", ROOT_PATH) => write_response(&mut stream, RESP_200),
                         ("GET", [47, 101, 99, 104, 111, 47, content @ ..]) => {
+                            let encoding = req.headers.get("Accept-Encoding");
                             write_response(
                                 &mut stream,
-                                &HttpResponse::build_text_plain("200 OK", content),
+                                &HttpResponse::build(
+                                    "200 OK",
+                                    "text/plain",
+                                    encoding.map(|s| &**s),
+                                    content,
+                                ),
                             );
                         }
                         ("GET", USERAGENT_PATH) => write_response(
                             &mut stream,
-                            &HttpResponse::build_text_plain(
+                            &HttpResponse::build(
                                 "200 OK",
+                                "text/plain",
+                                None,
                                 req.headers.get("User-Agent").unwrap().as_bytes(),
                             ),
                         ),
@@ -63,7 +71,12 @@ fn main() {
                                     let bytes_read = file.read_to_end(&mut buf).unwrap();
                                     write_response(
                                         &mut &stream,
-                                        &HttpResponse::build_octet_stream(&buf[..bytes_read]),
+                                        &HttpResponse::build(
+                                            "200 OK",
+                                            "application/octet-stream",
+                                            None,
+                                            &buf[..bytes_read],
+                                        ),
                                     );
                                 }
                                 _ => write_response(&stream, RESP_404),
@@ -91,6 +104,7 @@ fn main() {
         });
     }
 }
+
 fn write_response(mut stream: &TcpStream, response: &[u8]) {
     let _ = stream.write_all(response);
 }
@@ -138,26 +152,28 @@ impl HttpRequest {
 struct HttpResponse {}
 
 impl HttpResponse {
-    fn build_text_plain<'a>(status_code: &'a str, content: &'a [u8]) -> Vec<u8> {
+    fn build<'a>(
+        status_code: &'a str,
+        content_type: &str,
+        encoding: Option<&str>,
+        content: &'a [u8],
+    ) -> Vec<u8> {
         let mut res = format!(
-            "HTTP/1.1 {}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n",
+            "HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\n",
             status_code,
+            content_type,
             content.len(),
         )
         .bytes()
         .collect::<Vec<_>>();
-        res.extend_from_slice(content);
 
-        res
-    }
+        match encoding {
+            Some("gzip") => {
+                res.extend_from_slice(format!("Accept-Encoding: {}", encoding.unwrap()).as_bytes())
+            }
+            _ => {}
+        }
 
-    fn build_octet_stream<'a>(content: &'a [u8]) -> Vec<u8> {
-        let mut res = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n",
-            content.len(),
-        )
-        .bytes()
-        .collect::<Vec<_>>();
         res.extend_from_slice(content);
 
         res
