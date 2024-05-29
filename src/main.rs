@@ -171,7 +171,7 @@ impl HttpResponse {
             Some("gzip") => {
                 res.extend_from_slice(format!("Content-Encoding: gzip\r\n\r\n",).as_bytes())
             }
-            _ => {}
+            _ => res.extend_from_slice("\r\n".as_bytes()),
         }
 
         res.extend_from_slice(content);
