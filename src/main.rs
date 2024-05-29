@@ -168,7 +168,7 @@ impl HttpResponse {
         .collect::<Vec<_>>();
 
         match encoding {
-            Some("gzip") => {
+            Some(encodings) if encodings.contains("gzip") => {
                 res.extend_from_slice(format!("Content-Encoding: gzip\r\n\r\n",).as_bytes())
             }
             _ => res.extend_from_slice("\r\n".as_bytes()),
